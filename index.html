@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>SoundDrift</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+      background: linear-gradient(160deg, #1a0a0a 0%, #4a1a1a 30%, #8b3a3a 60%, #d4756b 85%, #e8a090 100%);
+      transition: background 1.2s ease;
+    }
+
+    .card {
+      width: 320px;
+      background: rgba(30, 15, 15, 0.75);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+      perspective: 800px;
+    }
+
+    .card-cover {
+      width: 100%;
+      aspect-ratio: 1;
+      overflow: hidden;
+    }
+
+    .card-cover img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .card-info {
+      padding: 20px;
+    }
+
+    .card-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 6px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .card-artist {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 12px;
+    }
+
+    .card-date {
+      font-size: 12px;
+      color: rgba(232, 160, 144, 0.8);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="card-cover">
+      <img src="https://picsum.photos/600/600?random=1" alt="cover">
+    </div>
+    <div class="card-info">
+      <div class="card-title">National Treasures</div>
+      <div class="card-artist">@克里斯R 分享的音乐</div>
+      <div class="card-date">2026.05.17</div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    const card = document.querySelector('.card');
+
+    // 多个不同频率的正弦波叠加，天然连续无断点
+    const startTime = performance.now();
+
+    function animate() {
+      const t = (performance.now() - startTime) / 1000;
+
+      // X: 两个不同频率正弦叠加
+      const x = Math.sin(t * 1.7) * 12 + Math.sin(t * 0.9) * 8;
+      // Y: 两个不同频率正弦叠加
+      const y = Math.sin(t * 1.4) * 10 + Math.sin(t * 0.8) * 9;
+
+      // XYZ 旋转：不同频率正弦叠加，幅度 10-20°
+      const rx = Math.sin(t * 0.8) * 7 + Math.sin(t * 1.3) * 8;
+      const ry = Math.sin(t * 1.0) * 8 + Math.sin(t * 0.5) * 10;
+      const rz = Math.sin(t * 0.6) * 5 + Math.sin(t * 1.1) * 7;
+
+      gsap.set(card, { x, y, rotateX: rx, rotateY: ry, rotateZ: rz });
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
