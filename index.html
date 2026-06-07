@@ -4,7 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>SoundDrift</title>
+  <!-- Fraunces：高对比文艺衬线，气质接近 Roxierossa -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&display=swap" rel="stylesheet">
   <style>
+
+    /* 本地 Cervanttis 字体（专辑名小字用，纤细手写体） */
+    @font-face {
+      font-family: 'Cervanttis';
+      src: url('assets/fonts/Cervanttis.otf') format('opentype'),
+           url('assets/fonts/Cervanttis.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -15,29 +30,229 @@
       width: 100vw;
       height: 100vh;
       overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
-      background: linear-gradient(160deg, #1a0a0a 0%, #4a1a1a 30%, #8b3a3a 60%, #d4756b 85%, #e8a090 100%);
-      transition: background 1.2s ease;
+      /* 底层：干净的灰色圆形径向渐变（白→灰→黑），未点击前的默认态 */
+      background-color: #000000;
+      background-image:
+        radial-gradient(115% 90% at 50% 104%,
+          #f2f2f2 0%,
+          #cfcfcf 12%,
+          #9a9a9a 26%,
+          #5e5e5e 42%,
+          #2e2e2e 58%,
+          rgba(0, 0, 0, 0) 78%);
+    }
+
+    /* 颜色游移层：低饱和度的彩色光晕，缓慢循环色相 →
+       渐变带颜色变化，但灰色底主导，整体仍是灰调。 */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background:
+        radial-gradient(115% 90% at 50% 104%,
+          rgba(151, 127, 180, 0.7) 0%,
+          rgba(116, 109, 160, 0.5) 30%,
+          rgba(74, 78, 116, 0.3) 52%,
+          rgba(0, 0, 0, 0) 75%);
+      mix-blend-mode: soft-light;
+      filter: saturate(0.9) hue-rotate(0deg);
+      animation: hue-drift 14s linear infinite;
+    }
+
+    @keyframes hue-drift {
+      to { filter: hue-rotate(360deg); }
+    }
+
+    /* 选中卡片时的“主色调”底部光晕层：默认透明，点击后淡入(screen 叠加，
+       颜色由 --bloom-c 给，JS 在同色系内缓慢变化)。与 ::before 交叉淡入淡出，无突变。 */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background:
+        radial-gradient(120% 95% at 50% 104%,
+          rgba(var(--bloom-c, 151,127,180), 0.95) 0%,
+          rgba(var(--bloom-c, 151,127,180), 0.70) 32%,
+          rgba(var(--bloom-c, 151,127,180), 0.40) 56%,
+          rgba(0, 0, 0, 0) 80%);
+      mix-blend-mode: screen;
+      opacity: 0;
+      transition: opacity 0.6s ease;
+    }
+    body.tinted::after { opacity: 1; }
+
+    #stage {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    /* 顶部 MV：贴着屏幕顶部、横向撑满两边，藏进黑色渐变里。
+       z-index 0：在 body 的彩色光晕(-1)之上、卡片(#stage 默认层)之下。 */
+    .mv-top {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 56vh;              /* 只占顶部一带 */
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+      /* 四周羽化为透明 → 视频边缘没有硬切，融进黑色。下边羽化最长。 */
+      -webkit-mask:
+        linear-gradient(to bottom, #000 0%, #000 30%, transparent 92%),
+        linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%);
+      -webkit-mask-composite: source-in;
+      mask:
+        linear-gradient(to bottom, #000 0%, #000 30%, transparent 92%),
+        linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%);
+      mask-composite: intersect;
+    }
+
+    .mv-video, .mv-clip {
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      min-width: 100%;           /* 放大撑满两边屏幕，不留切边 */
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      /* 黑白处理 + 压暗，只隐约可见 */
+      filter: grayscale(1) brightness(0.55) contrast(1.05);
+    }
+
+    /* 点击后的卡片 MV 覆盖层：默认透明，选中淡入、收回淡出 */
+    .mv-clip {
+      opacity: 0;
+      transition: opacity 0.55s ease;
+    }
+
+    /* 暗层：再压一层深色，MV 只透出一点点 */
+    .mv-shade {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.62);
+    }
+
+    /* 当前行歌词(SplitText 逐字符进场)：居中卡片下方，默认隐藏，点开淡入 */
+    #lyric-split {
+      position: fixed;
+      left: 50%;
+      bottom: 7vh;
+      transform: translateX(-50%);
+      width: 82vw;
+      max-width: 1000px;
+      text-align: center;
+      z-index: 50;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      font-family: 'Fraunces', Georgia, serif;   /* 与歌曲名同字体 */
+      font-weight: 600;
+      font-size: 30px;
+      line-height: 1.3;
+      color: #fff;
+      text-shadow: 0 2px 18px rgba(0,0,0,0.55);
+    }
+    #lyric-split .ls-char {
+      display: inline-block;
+      white-space: pre;       /* 保留空格 */
+      will-change: transform, opacity;
+    }
+
+    /* 每张卡的“槽位”：负责扇形定位/旋转/缩放与入场位移，
+       透视放这里，内部 .card 的 3D 漂浮才有纵深。
+       定位变换在槽位、漂浮变换在内部 .card —— 两者互不干扰。 */
+    .card-slot {
+      position: absolute;
+      width: 384px;          /* 比原始 320 放大 20% */
+      transform-origin: center center;
+      perspective: 1000px;
+      transform-style: preserve-3d;
+      will-change: transform;
+    }
+
+    /* 悬停层：承载“放大 + 上移 + 跟随鼠标 3D 倾斜”。
+       变换原点在底部中心 → 放大时从卡片最下方往上长。 */
+    .card-hover {
+      position: relative;
+      transform-origin: bottom center;
+      transform-style: preserve-3d;
+      will-change: transform;
     }
 
     .card {
-      width: 320px;
-      background: rgba(30, 15, 15, 0.75);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-radius: 20px;
+      width: 100%;
+      border-radius: 22px;
       overflow: hidden;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-      perspective: 800px;
+      transform-style: preserve-3d;
+      position: relative;
+      cursor: pointer;
+      /* 整张卡是一块透红毛玻璃 */
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      /* 弥散柔和投影：两层叠加，透明度减半，扩散更大不僵硬 */
+      box-shadow:
+        0 80px 150px rgba(0, 0, 0, 0.0875),
+        0 62px 40px rgba(0, 0, 0, 0.05);
+    }
+
+    /* 沿边框转圈的描边，两端羽化（类似 AE 修剪路径 + 拖尾）。
+       悬停时（.hovered）显示并转圈，移走即消失；点击播放（.playing）也显示。 */
+    @property --trim-angle {
+      syntax: '<angle>';
+      inherits: false;
+      initial-value: 0deg;
+    }
+
+    .card.playing::after,
+    .card.hovered::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 22px;
+      padding: 2px;                /* 描边粗细 */
+      pointer-events: none;
+      z-index: 2;
+      /* 一段亮线，两端 transparent → 亮 → transparent，即羽化拖尾 */
+      /* 描边色由 --trim-rgb 给(默认白)，选中时换成卡片主色调；两端羽化，透明度不变 */
+      background: conic-gradient(
+        from var(--trim-angle),
+        transparent 0%,
+        transparent 61%,
+        rgba(var(--trim-rgb, 255,255,255), 0.8) 88%,
+        rgba(var(--trim-rgb, 255,255,255), 0.36) 93%,
+        transparent 98%
+      );
+      /* 只保留边框那一圈（content-box 与整体做异或，挖空中间） */
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
+      animation: trim-spin 6.4s linear infinite;
+    }
+
+    @keyframes trim-spin {
+      to { --trim-angle: 360deg; }
     }
 
     .card-cover {
+      position: relative;
       width: 100%;
       aspect-ratio: 1;
       overflow: hidden;
+      /* 上/左/右贴边无缝，仅底部圆角 → 图片像盖在玻璃上 */
+      border-bottom-left-radius: 16px;
+      border-bottom-right-radius: 16px;
+      /* 鼠标点光源位置(百分比) + 悬停系数 h(0..1，由 JS 喂入) */
+      --mx: 50%;
+      --my: 50%;
+      --h: 0;
     }
 
     .card-cover img {
@@ -47,70 +262,1070 @@
       display: block;
     }
 
-    .card-info {
-      padding: 20px;
+    /* 去色变暗层：backdrop-filter 把背后的封面图变灰变暗。
+       径向遮罩在鼠标(--mx,--my)处挖一个柔和的洞露出原彩色。
+       每一段透明度都乘以 --h：不悬停(h=0)→处处不透明→整张灰暗；
+       悬停(h=1)→洞张开。h 渐变即"原地淡出/淡入"，不靠缩放半径，
+       所以消失时是整团光均匀变暗化没，而非塌缩成一个点。 */
+    .card-cover::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      backdrop-filter: grayscale(1) brightness(0.5);
+      -webkit-backdrop-filter: grayscale(1) brightness(0.5);
+      -webkit-mask: radial-gradient(circle 320px at var(--mx) var(--my),
+                      rgba(0,0,0,calc(1 - 1.00*var(--h))) 0%,
+                      rgba(0,0,0,calc(1 - 0.92*var(--h))) 26%,
+                      rgba(0,0,0,calc(1 - 0.72*var(--h))) 44%,
+                      rgba(0,0,0,calc(1 - 0.48*var(--h))) 60%,
+                      rgba(0,0,0,calc(1 - 0.26*var(--h))) 74%,
+                      rgba(0,0,0,calc(1 - 0.12*var(--h))) 85%,
+                      rgba(0,0,0,calc(1 - 0.04*var(--h))) 93%,
+                      #000 100%);
+      mask: radial-gradient(circle 320px at var(--mx) var(--my),
+              rgba(0,0,0,calc(1 - 1.00*var(--h))) 0%,
+              rgba(0,0,0,calc(1 - 0.92*var(--h))) 26%,
+              rgba(0,0,0,calc(1 - 0.72*var(--h))) 44%,
+              rgba(0,0,0,calc(1 - 0.48*var(--h))) 60%,
+              rgba(0,0,0,calc(1 - 0.26*var(--h))) 74%,
+              rgba(0,0,0,calc(1 - 0.12*var(--h))) 85%,
+              rgba(0,0,0,calc(1 - 0.04*var(--h))) 93%,
+              #000 100%);
+      opacity: var(--cover-gray, 1);   /* 1=灰度层显示；选中时由 JS 补间到 0 显全色 */
     }
 
+    .card-info {
+      position: relative;
+      min-height: 200px;
+      padding: 18px 18px 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;   /* 歌曲名+专辑名在毛玻璃区垂直居中 */
+      align-items: center;       /* 水平居中 */
+      /* 毛玻璃点光源：位置(--mx2,--my2)、悬停系数(--h)、封面主色调(--tint) */
+      --mx2: 50%;
+      --my2: 50%;
+      --h: 0;
+      --tint: 255, 255, 255;
+    }
+
+    /* 毛玻璃上的点光源：不去色，而是把封面主色调以柔光叠加在玻璃上，
+       径向渐变中心跟随鼠标，整体亮度由 --h 控制(离开→淡出，不塌缩)。 */
+    .card-info::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      mix-blend-mode: screen;
+      opacity: var(--h);
+      background: radial-gradient(circle 416px at var(--mx2) var(--my2),
+                    rgba(var(--tint), 0.55) 0%,
+                    rgba(var(--tint), 0.40) 26%,
+                    rgba(var(--tint), 0.24) 44%,
+                    rgba(var(--tint), 0.12) 60%,
+                    rgba(var(--tint), 0.05) 78%,
+                    rgba(var(--tint), 0) 100%);
+    }
+
+    .card-info > * { position: relative; width: 100%; }   /* 文字在光斑之上，占满宽度以便居中+截断 */
+
     .card-title {
-      font-size: 20px;
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: 30px;
       font-weight: 600;
       color: #fff;
       margin-bottom: 6px;
+      text-align: center;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
     .card-artist {
+      font-family: 'Cervanttis', cursive;
       font-size: 13px;
-      color: rgba(255, 255, 255, 0.5);
-      margin-bottom: 12px;
-    }
-
-    .card-date {
-      font-size: 12px;
-      color: rgba(232, 160, 144, 0.8);
+      color: rgba(255, 255, 255, 0.7);
+      text-align: center;
+      text-transform: uppercase;
     }
   </style>
 </head>
 <body>
 
-  <div class="card">
-    <div class="card-cover">
-      <img src="https://picsum.photos/600/600?random=1" alt="cover">
-    </div>
-    <div class="card-info">
-      <div class="card-title">National Treasures</div>
-      <div class="card-artist">@克里斯R 分享的音乐</div>
-      <div class="card-date">2026.05.17</div>
-    </div>
+  <!-- 顶部 MV：黑白处理 + 暗层，四周羽化融入黑色背景。
+       默认态= 随机 MV 混剪(随机片段、声音渐入渐出)；点击卡片时上层覆盖该卡 MV(静音)，收回淡出。 -->
+  <div class="mv-top">
+    <video class="mv-video" muted playsinline></video>
+    <video class="mv-clip" loop muted playsinline></video>
+    <div class="mv-shade"></div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <div id="stage"></div>
+
+  <!-- 点开卡片后的当前行歌词(SplitText 逐字符进场)，居中卡片下方 -->
+  <div id="lyric-split"></div>
+
+  <!-- 卡片模板，JS 据此克隆 -->
+  <template id="card-tpl">
+    <div class="card-slot">
+      <div class="card-hover">
+        <div class="card">
+          <div class="card-cover">
+            <img src="assets/cover.jpg" alt="cover">
+          </div>
+          <div class="card-info">
+            <div class="card-title">National Treasures</div>
+            <div class="card-artist">@克里斯R 分享的音乐</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script src="lib/gsap.min.js"></script>
   <script>
-    const card = document.querySelector('.card');
+    const rand = (min, max) => Math.random() * (max - min) + min;
 
-    // 多个不同频率的正弦波叠加，天然连续无断点
-    const startTime = performance.now();
+    // 顶部默认 MV = 随机混剪：随机挑一个 MV、随机播一段(14~26s)，到点切下一个；
+    // 声音段间渐入渐出、画面切换短暂淡一下，避免硬切。点卡片时此层被静音/盖住，收回后继续。
+    (function mvMontage() {
+      const v = document.querySelector('.mv-video');
+      if (!v) return;
+      const POOL = [
+        'assets/video/mv1.mp4','assets/video/mv3.mp4','assets/video/mv4.mp4','assets/video/mv5.mp4',
+        'assets/video/mv6.mp4','assets/video/mv7.mp4','assets/video/mv8.mp4','assets/video/mv9.mp4',
+        'assets/video/mv10.mp4','assets/video/mv11.mp4','assets/video/mv12.mp4','assets/video/mv13.mp4',
+        'assets/video/mv14.mp4','assets/video/mv15.mp4','assets/video/mv16.mp4','assets/video/mv17.mp4',
+        'assets/video/mv18.mp4','assets/video/mv19.mp4','assets/video/mvdefault.mp4',
+      ];
+      const VOL = 0.35;                 // 混剪音量(首次交互后才出声)
+      const FADE = 1.1;                 // 声音/画面渐变时长(秒)
+      let segTimer = null;
+      let lastIdx = -1;
+      v.muted = true; v.loop = false; v.volume = 0;   // 先静音(浏览器策略)，音量由段落管理
 
-    function animate() {
-      const t = (performance.now() - startTime) / 1000;
+      function pickNext() {
+        let i; do { i = Math.floor(Math.random() * POOL.length); } while (POOL.length > 1 && i === lastIdx);
+        lastIdx = i;
+        return POOL[i];
+      }
 
-      // X: 两个不同频率正弦叠加
-      const x = Math.sin(t * 1.7) * 12 + Math.sin(t * 0.9) * 8;
-      // Y: 两个不同频率正弦叠加
-      const y = Math.sin(t * 1.4) * 10 + Math.sin(t * 0.8) * 9;
+      function playSegment() {
+        clearTimeout(segTimer);
+        const src = pickNext();
+        const startPlay = () => {
+          const dur = v.duration || 60;
+          const segLen = 14 + Math.random() * 12;                 // 14~26s 一段
+          const maxStart = Math.max(0, dur - segLen - 0.5);
+          const start = Math.random() * maxStart;                 // 随机起点
+          try { v.currentTime = start; } catch (e) {}
+          v.play().catch(() => {});
+          // 画面淡入 + 声音渐入到 VOL(始终管理，与默认视频音量一致)
+          gsap.killTweensOf(v);
+          v.volume = 0;
+          gsap.to(v, { opacity: 1, duration: 0.6, ease: 'power2.out' });
+          gsap.to(v, { volume: VOL, duration: FADE, ease: 'sine.out' });
+          // 段末提前 FADE 秒开始渐出，结束切下一段
+          const ms = (segLen - FADE) * 1000;
+          segTimer = setTimeout(() => {
+            gsap.to(v, { volume: 0, duration: FADE, ease: 'sine.in' });
+            gsap.to(v, { opacity: 0.15, duration: FADE * 0.8, ease: 'power2.in',
+              onComplete: playSegment });
+          }, Math.max(2000, ms));
+        };
+        if (v.getAttribute('src') !== src) {
+          v.src = src;
+          const onmeta = () => { v.removeEventListener('loadedmetadata', onmeta); startPlay(); };
+          v.addEventListener('loadedmetadata', onmeta);
+          v.load();
+        } else { startPlay(); }
+      }
 
-      // XYZ 旋转：不同频率正弦叠加，幅度 10-20°
-      const rx = Math.sin(t * 0.8) * 7 + Math.sin(t * 1.3) * 8;
-      const ry = Math.sin(t * 1.0) * 8 + Math.sin(t * 0.5) * 10;
-      const rz = Math.sin(t * 0.6) * 5 + Math.sin(t * 1.1) * 7;
+      // 首次交互解锁声音(浏览器策略)：只解除静音，音量已由段落管理到 VOL
+      const unlock = () => {
+        v.muted = false;
+        window.removeEventListener('pointerdown', unlock);
+        window.removeEventListener('keydown', unlock);
+      };
+      window.addEventListener('pointerdown', unlock);
+      window.addEventListener('keydown', unlock);
 
-      gsap.set(card, { x, y, rotateX: rx, rotateY: ry, rotateZ: rz });
-      requestAnimationFrame(animate);
+      playSegment();
+    })();
+
+
+    // 歌曲高潮预览 + 节奏分析(Web Audio)：悬停从高潮段循环播放，点开整首播放，
+    // AnalyserNode 读低频鼓点能量 -> audioBeat 驱动选中卡 3D 倾斜跟节奏。
+    // 每个封面号对应自己的歌(无歌的封面不播)。start/end 为高潮段(秒)。
+    const AUDIO = {
+      1:  { file: 'assets/audio/audio1.mp3',  start: 27,  end: 51 },   // LET ME LUV U
+      2:  { file: 'assets/audio/audio2.mp3',  start: 19,  end: 33 },   // Shoot
+      3:  { file: 'assets/audio/audio3.mp3',  start: 31,  end: 48 },   // brother hood
+      4:  { file: 'assets/audio/audio4.mp3',  start: 13,  end: 51 },   // O'3300
+      5:  { file: 'assets/audio/audio5.mp3',  start: 9,   end: 26 },   // SUN DOWN
+      6:  { file: 'assets/audio/audio6.mp3',  start: 23,  end: 82 },   // National Treasures
+      7:  { file: 'assets/audio/audio7.mp3',  start: 114, end: 168 },  // 咋说 / What Can I Say
+      8:  { file: 'assets/audio/audio8.mp3',  start: 38,  end: 63 },   // MVP
+      9:  { file: 'assets/audio/audio9.mp3',  start: 84,  end: 117 },  // What U Gon Do
+      10: { file: 'assets/audio/audio10.mp3', start: 11,  end: 31 },   // I THINK I FELL IN <3
+      11: { file: 'assets/audio/audio11.mp3', start: 27,  end: 55 },   // Freestyle
+      12: { file: 'assets/audio/audio12.mp3', start: 52,  end: 77 },   // wintry rain / 冷色晚风
+      13: { file: 'assets/audio/audio13.mp3', start: 32,  end: 47 },   // Murder
+      14: { file: 'assets/audio/audio14.mp3', start: 82,  end: 104 },  // Scared 2 Be Lonely
+      15: { file: 'assets/audio/audio15.mp3', start: 122, end: 196 },  // Forget it
+      16: { file: 'assets/audio/audio16.mp3', start: 167, end: 222 },  // CN TOWER
+      17: { file: 'assets/audio/audio17.mp3', start: 60,  end: 80 },   // Manta
+      18: { file: 'assets/audio/audio18.mp3', start: 75,  end: 91 },   // Colt.45
+      19: { file: 'assets/audio/audio19.mp3', start: 45,  end: 62 },   // Myself
+    };
+    const audioEl = new Audio();
+    audioEl.loop = false; audioEl.preload = 'auto'; audioEl.volume = 0;
+    let actx = null, analyser = null, freqData = null;
+    let audioBeat = 0;
+    let previewToken = 0;
+    let curSeg = { start: 0, end: 0 };        // 当前曲的高潮段
+
+    // 由卡当前封面图取封面号(1..19)
+    function coverNumOf(cs) {
+      const img = cs && cs.slot.querySelector('.card-cover img');
+      const m = img && img.src.match(/cover(\d+)\.jpg/);
+      return m ? +m[1] : 0;
     }
 
-    animate();
+    function ensureAudioGraph() {
+      if (actx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      actx = new AC();
+      const srcNode = actx.createMediaElementSource(audioEl);
+      analyser = actx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.75;
+      freqData = new Uint8Array(analyser.frequencyBinCount);
+      srcNode.connect(analyser);
+      analyser.connect(actx.destination);
+    }
+
+    // full=false：悬停，循环播放高潮段(该曲的 start~end)
+    // full=true ：点开，从头完整播放整首(到尾自然循环整首)
+    // cs 决定播哪首(按封面号查 AUDIO)；该封面无歌 → 不播任何声音
+    function startPreview(full, cs) {
+      const info = AUDIO[coverNumOf(cs)];
+      if (!info) { stopPreview(); return; }    // 无歌：停止并恢复视频声
+      ensureAudioGraph();
+      if (actx.state === 'suspended') actx.resume();
+      const my = ++previewToken;
+      const mv = document.querySelector('.mv-video');
+      if (mv) mv.muted = true;                 // 放卡片声音时，顶部视频静音
+      curSeg = { start: info.start, end: info.end };
+      const seekTo = full ? 0 : info.start;
+
+      const begin = () => {
+        try { audioEl.currentTime = seekTo; } catch (e) {}
+        audioEl.loop = !!full;                 // 整首播放靠原生 loop 循环
+        audioEl.play().then(() => {
+          gsap.killTweensOf(audioEl);
+          gsap.to(audioEl, { volume: 0.49, duration: 0.25, overwrite: true });
+        }).catch(() => {});
+      };
+
+      // 高潮段循环(仅悬停模式)
+      if (audioEl._loopHandler) audioEl.removeEventListener('timeupdate', audioEl._loopHandler);
+      if (!full) {
+        audioEl._loopHandler = () => {
+          if (audioEl.currentTime >= curSeg.end) { try { audioEl.currentTime = curSeg.start; } catch (e) {} }
+        };
+        audioEl.addEventListener('timeupdate', audioEl._loopHandler);
+      } else {
+        audioEl._loopHandler = null;
+      }
+
+      // 切歌：换 src 后等可播放再定位/播放；同一首则直接开始
+      if (audioEl.getAttribute('src') !== info.file) {
+        audioEl.src = info.file;
+        const onready = () => { audioEl.removeEventListener('loadeddata', onready); if (my === previewToken) begin(); };
+        audioEl.addEventListener('loadeddata', onready);
+        audioEl.load();
+      } else {
+        begin();
+      }
+      return my;
+    }
+
+    function stopPreview() {
+      const my = ++previewToken;
+      gsap.killTweensOf(audioEl);
+      gsap.to(audioEl, {
+        volume: 0, duration: 0.22, overwrite: true,
+        onComplete: () => {
+          if (my === previewToken) {
+            audioEl.pause();
+            const mv = document.querySelector('.mv-video');
+            if (mv) mv.muted = false;        // 卡片声音停了，恢复顶部视频声音
+          }
+        },
+      });
+    }
+
+    function sampleBeat() {
+      if (!analyser) { audioBeat *= 0.9; return; }
+      analyser.getByteFrequencyData(freqData);
+      const N = freqData.length;
+      // 低频段(鼓/贝斯)能量
+      let bass = 0; const lo = 1, hi = 8;
+      for (let i = lo; i < hi; i++) bass += freqData[i];
+      bass /= (hi - lo) * 255;
+      // 全频段(整体声音)平均能量
+      let all = 0;
+      for (let i = 0; i < N; i++) all += freqData[i];
+      all /= N * 255;
+      // 鼓点 + 整体声音加权：鼓点占大头(更有节奏感)，整体声音垫底(随旋律起伏)
+      const energy = Math.min(1, bass * 0.65 + all * 0.85);
+      audioBeat += (energy - audioBeat) * (energy > audioBeat ? 0.6 : 0.12);
+    }
+
+    // ── 点击后顶部 MV 覆盖：按封面号放该卡 MV(静音)，收回淡出；默认视频常驻底层不重播 ──
+    // cover2(Shoot) 无 MV → 用默认视频(不覆盖)。
+    const MV = {
+      1: 'assets/video/mv1.mp4',  3: 'assets/video/mv3.mp4',  4: 'assets/video/mv4.mp4',
+      5: 'assets/video/mv5.mp4',  6: 'assets/video/mv6.mp4',  7: 'assets/video/mv7.mp4',
+      8: 'assets/video/mv8.mp4',  9: 'assets/video/mv9.mp4',  10: 'assets/video/mv10.mp4',
+      11: 'assets/video/mv11.mp4', 12: 'assets/video/mv12.mp4', 13: 'assets/video/mv13.mp4',
+      14: 'assets/video/mv14.mp4', 15: 'assets/video/mv15.mp4', 16: 'assets/video/mv16.mp4',
+      17: 'assets/video/mv17.mp4', 18: 'assets/video/mv18.mp4', 19: 'assets/video/mv19.mp4',
+    };
+    const mvClip = document.querySelector('.mv-clip');
+
+    function showClipMV(cs) {
+      const src = MV[coverNumOf(cs)];
+      if (!mvClip || !src) { hideClipMV(); return; }   // 无 MV：保持默认视频
+      if (mvClip.getAttribute('src') !== src) { mvClip.src = src; }
+      mvClip.muted = true;                              // 有音乐了，MV 不出声
+      mvClip.currentTime = 0;
+      mvClip.play().catch(() => {});
+      mvClip.style.opacity = '1';                       // 淡入覆盖默认视频
+    }
+    function hideClipMV() {
+      if (!mvClip) return;
+      mvClip.style.opacity = '0';                       // 淡出 → 露出仍在播的默认视频(不重播)
+      // 淡出结束后暂停覆盖层省资源(默认视频不动)
+      clearTimeout(mvClip._pauseT);
+      mvClip._pauseT = setTimeout(() => { try { mvClip.pause(); } catch (e) {} }, 600);
+    }
+
+    // 当前行歌词：SplitText 式逐字符进场(opacity/y + stagger + power3.out)，与歌曲名同字体。
+    // 含中文的行暂跳过(待用户提供英文歌词/确定翻译方案)。
+    const lyricEl = document.getElementById("lyric-split");
+    let lyricLines = [];            // [{t, text}]
+    let lyricActive = false, lyricRAF = null, lyricLine = null;
+
+    function hasCJK(s){ return /[㐀-鿿豈-﫿぀-ヿ]/.test(s); }
+
+    function loadLyrics(num) {
+      lyricLines = [];
+      fetch(`assets/lyrics/lyrics${num}.lrc`).then(r => r.ok ? r.text() : "").then(txt => {
+        txt.split(/\r?\n/).forEach(line => {
+          const m = line.match(/^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$/);
+          if (m && m[3].trim()) lyricLines.push({ t: (+m[1]) * 60 + parseFloat(m[2]), text: m[3].trim() });
+        });
+        lyricLines.sort((a, b) => a.t - b.t);
+      }).catch(() => {});
+    }
+
+    function lyricAt(time) {
+      let s = "";
+      for (let i = 0; i < lyricLines.length; i++) {
+        if (lyricLines[i].t <= time) s = lyricLines[i].text; else break;
+      }
+      return s;
+    }
+
+    // 把一行拆成字符 span，逐个 fromTo 进场(SplitText 同款)
+    function splitReveal(text) {
+      lyricEl.innerHTML = "";
+      const frag = document.createDocumentFragment();
+      const spans = [];
+      for (const chRaw of Array.from(text)) {
+        const span = document.createElement("span");
+        span.className = "ls-char";
+        span.textContent = chRaw === " " ? " " : chRaw;
+        frag.appendChild(span);
+        spans.push(span);
+      }
+      lyricEl.appendChild(frag);
+      gsap.killTweensOf(spans);
+      gsap.fromTo(spans,
+        { opacity: 0, y: 40 },
+        { opacity: 1, y: 0, duration: 1.25, ease: "power3.out", stagger: 0.05, force3D: true });
+    }
+
+    function lyricFrame() {
+      lyricRAF = requestAnimationFrame(lyricFrame);
+      let line = lyricAt(audioEl.currentTime || 0);
+      if (hasCJK(line)) line = "";          // 含中文的行暂不显示
+      if (line === lyricLine) return;
+      lyricLine = line;
+      if (line) splitReveal(line); else lyricEl.innerHTML = "";
+    }
+
+    function showLyrics(num) {
+      loadLyrics(num);
+      lyricLine = null; lyricEl.innerHTML = "";
+      if (!lyricActive) { lyricActive = true; lyricFrame(); }
+      lyricEl.style.opacity = "1";
+    }
+    function hideLyrics() {
+      lyricEl.style.opacity = "0";
+      lyricActive = false;
+      if (lyricRAF) { cancelAnimationFrame(lyricRAF); lyricRAF = null; }
+      setTimeout(() => { lyricEl.innerHTML = ""; }, 420);
+    }
+
+    // ───────────────────────────────────────────────────────────
+    //  无规则漂浮动画（调了很久的效果，原样保留）
+    //  现在封装成 startDrift(cardEl)，入场时不调用；
+    //  将来点击某张卡时才对那张卡触发。
+    // ───────────────────────────────────────────────────────────
+    function startDrift(card) {
+      // 节奏来自“推进速度”的随机变化，而非位置本身。
+      // speed 在快/慢之间平滑过渡且永不归零 —— 所以卡片忽快忽慢但绝不停顿，保持丝滑。
+      const state = { speed: 1 };
+      let rafId = null;
+      let speedTween = null;
+
+      function shiftSpeed() {
+        speedTween = gsap.to(state, {
+          speed: rand(0.35, 2.1),      // 慢↔快，下限不为 0 → 接缝处无停顿
+          duration: rand(0.8, 2.2),    // 每段变速时长随机
+          ease: 'sine.inOut',
+          onComplete: shiftSpeed,      // 平滑接下一段，无限连续
+        });
+      }
+      shiftSpeed();
+
+      // 位置仍由多正弦叠加驱动（连续无断点），只是用“变速相位”代替匀速时间
+      let phase = 0;
+      let last = performance.now();
+
+      function animate(now) {
+        const dt = (now - last) / 1000;
+        last = now;
+        // 节奏只驱动“推进速度”：鼓点强→相位推得快(晃得更急)，但振幅不变 →
+        // 角度仍在原范围内，且因位置是速度的积分，天然平滑、不会一顿一顿。
+        phase += state.speed * (1 + audioBeat * 1.5) * dt;
+
+        // 振幅完全沿用最初调好的值，不叠加任何额外角度
+        const x = Math.sin(phase * 1.7) * 12 + Math.sin(phase * 0.9) * 8;
+        const y = Math.sin(phase * 1.4) * 10 + Math.sin(phase * 0.8) * 9;
+        const rx = Math.sin(phase * 0.8) * 7 + Math.sin(phase * 1.3) * 8;
+        const ry = Math.sin(phase * 1.0) * 14 + Math.sin(phase * 0.5) * 16;
+        const rz = Math.sin(phase * 0.6) * 5 + Math.sin(phase * 1.1) * 7;
+
+        gsap.set(card, { x, y, rotateX: rx, rotateY: ry, rotateZ: rz });
+        rafId = requestAnimationFrame(animate);
+      }
+      rafId = requestAnimationFrame(animate);
+
+      // 返回停止句柄：停掉 RAF 与变速 tween
+      return function stopDrift() {
+        if (rafId) cancelAnimationFrame(rafId);
+        if (speedTween) speedTween.kill();
+      };
+    }
+
+    // ──────────────────────────────────────────────
+    //  消散：原地模糊 + 淡出（弥散模糊感）。点击后其余卡执行 dissolve，返回时 reform。
+    // ──────────────────────────────────────────────
+    const DISSOLVE_MS = 420;       // 模糊消散/复原时长(ms)
+    const BLUR_MAX = 44;           // 最大模糊半径(px)
+    const DISP_SCALE = 1.18;       // 消散时向外扩散的放大比例
+
+    function dissolveCard(cs, done) {
+      const o = { b: 0, a: 1, s: 1 };
+      cs.card.style.transformOrigin = 'center center';
+      gsap.to(o, {
+        b: BLUR_MAX, a: 0, s: DISP_SCALE,
+        duration: DISSOLVE_MS / 1000,
+        ease: 'power2.out',
+        onUpdate: () => {
+          cs.card.style.filter = `blur(${o.b}px)`;
+          cs.card.style.opacity = String(o.a);
+          cs.card.style.transform = `scale(${o.s})`;   // 向外扩散
+        },
+        onComplete: () => { if (done) done(); },
+      });
+    }
+
+    function reformCard(cs, done) {
+      const o = { b: BLUR_MAX, a: 0, s: DISP_SCALE };
+      cs.card.style.transformOrigin = 'center center';
+      cs.card.style.filter = `blur(${BLUR_MAX}px)`;
+      cs.card.style.opacity = '0';
+      cs.card.style.transform = `scale(${DISP_SCALE})`;
+      gsap.to(o, {
+        b: 0, a: 1, s: 1,
+        duration: DISSOLVE_MS / 1000,
+        ease: 'power2.out',
+        onUpdate: () => {
+          cs.card.style.filter = `blur(${o.b}px)`;
+          cs.card.style.opacity = String(o.a);
+          cs.card.style.transform = `scale(${o.s})`;   // 从外收回
+        },
+        onComplete: () => {
+          cs.card.style.filter = '';
+          cs.card.style.opacity = '';
+          cs.card.style.transform = '';
+          cs.card.style.transformOrigin = '';
+          if (done) done();
+        },
+      });
+    }
+
+    // 封面灰度层透明度补间：to=0 显全色，to=1 回灰度。用于选中/返回时平滑过渡。
+    function fadeCoverGray(cs, to) {
+      const o = { v: +(getComputedStyle(cs.cover).getPropertyValue('--cover-gray') || 1) };
+      if (isNaN(o.v)) o.v = to > 0.5 ? 0 : 1;
+      gsap.killTweensOf(o);
+      gsap.to(o, {
+        v: to, duration: 0.5, ease: 'power2.inOut',
+        onUpdate: () => cs.cover.style.setProperty('--cover-gray', o.v),
+      });
+    }
+
+    // ── 选中后底部主色调光晕：切到该卡主色调，并在“同色系”内缓慢明度/饱和度漂移 ──
+    function rgb2hsl(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+      let h = 0; const l = (mx + mn) / 2;
+      const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+      if (d !== 0) {
+        if (mx === r) h = ((g - b) / d) % 6;
+        else if (mx === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h *= 60; if (h < 0) h += 360;
+      }
+      return [h, s, l];
+    }
+    function hsl2rgbStr(h, s, l) {
+      const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+      let r = 0, g = 0, b = 0;
+      if (h < 60) [r, g, b] = [c, x, 0];
+      else if (h < 120) [r, g, b] = [x, c, 0];
+      else if (h < 180) [r, g, b] = [0, c, x];
+      else if (h < 240) [r, g, b] = [0, x, c];
+      else if (h < 300) [r, g, b] = [x, 0, c];
+      else [r, g, b] = [c, 0, x];
+      return `${Math.round((r + m) * 255)},${Math.round((g + m) * 255)},${Math.round((b + m) * 255)}`;
+    }
+    let bloomTween = null;
+    function startBloom(tint) {
+      const [r, g, b] = tint.split(',').map(s => +s.trim());
+      const [h, s, l] = rgb2hsl(r, g, b);
+      document.body.classList.add('tinted');
+      if (bloomTween) bloomTween.kill();
+      // 在同一色相附近(±12°)、饱和度/明度小幅来回 → 同色系的缓慢颜色变化
+      const st = { dh: 0, ds: 0, dl: 0 };
+      const apply = () => document.body.style.setProperty('--bloom-c',
+        hsl2rgbStr((h + st.dh + 360) % 360, Math.max(0.15, Math.min(1, s + st.ds)), Math.max(0.25, Math.min(0.7, l + st.dl))));
+      apply();
+      bloomTween = gsap.timeline({ repeat: -1, yoyo: true })
+        .to(st, { dh: 12, ds: 0.08, dl: 0.06, duration: 5, ease: 'sine.inOut', onUpdate: apply })
+        .to(st, { dh: -12, ds: -0.06, dl: -0.05, duration: 5, ease: 'sine.inOut', onUpdate: apply });
+    }
+    function stopBloom() {
+      document.body.classList.remove('tinted');     // 淡出(CSS transition)，回到灰调底
+      if (bloomTween) { bloomTween.kill(); bloomTween = null; }
+    }
+
+    //  入场时从右侧屏外沿圆弧依次扫入到各自位置；落位后保持静态，
+    //  不漂浮、不显示描边。点击某张卡才触发漂浮 + 描边。
+    // ───────────────────────────────────────────────────────────
+    const CONFIG = {
+      max: 20,            // 最多卡片数
+      gapPx: 130,         // 相邻卡之间的像素间距
+      scale: 1,           // 卡片缩放
+      topRatio: 0.44,     // 圆顶(0°,最高卡)中心的纵向位置（占视口高比例）
+      radiusRatio: 1.25,  // 圆弧半径占视口高比例（越大越平缓）
+      tilt: 1.0,          // 卡片完全径向（垂直于半径）→ 所有卡底边落在同一同心圆弧上
+      overflowPx: 160,    // 允许首尾卡超出屏幕边缘的量（px）
+      startAngle: 96,     // 入场起始角度（度，右侧屏外）
+      speed: 69,          // 入场角速度（度/秒）→ 越小入场越慢
+      stagger: 0.12,      // 相邻卡出发的时间差（秒）
+    };
+
+    const stage = document.getElementById('stage');
+    const tpl = document.getElementById('card-tpl');
+    const SLOT_W = 384; // 与 .card-slot 宽度一致
+
+    // 圆的几何参数（随视口变化）
+    function circle() {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const R = vh * CONFIG.radiusRatio;
+      const cx = vw / 2;
+      const cy = vh * CONFIG.topRatio + R; // 圆心在最高卡正下方 R 处
+      return { cx, cy, R };
+    }
+
+    // 给定圆周角度（度，0°=正上方/最高，正=向右），返回卡中心屏幕坐标与倾斜
+    function pointAt(angleDeg) {
+      const { cx, cy, R } = circle();
+      const rad = (angleDeg - 90) * Math.PI / 180; // -90 → 0°指向正上方
+      return {
+        x: cx + R * Math.cos(rad),
+        y: cy + R * Math.sin(rad),
+        rot: angleDeg * CONFIG.tilt,
+      };
+    }
+
+    // 由“10px 卡间距”换算成相邻卡的角度间隔（弧度）：
+    // 相邻卡中心弦长 = 卡宽 + 间距，弦长对应的圆心角
+    function gapRad() {
+      const { R } = circle();
+      const centerGap = SLOT_W * CONFIG.scale + CONFIG.gapPx;
+      return 2 * Math.asin(Math.min(0.5, centerGap / (2 * R)));
+    }
+
+    // 算屏幕能排下几张：以 0° 居中对称铺开，首尾卡允许超出屏幕 overflowPx
+    function computeFitCount() {
+      const vw = window.innerWidth;
+      const { cx, R } = circle();
+      const halfW = (SLOT_W * CONFIG.scale) / 2;
+      const g = gapRad();
+      let n = 1;
+      while (n + 1 <= CONFIG.max) {
+        const test = n + 1;
+        const halfSpan = ((test - 1) / 2) * g;          // 最右卡角度(弧度)
+        const edgeCenterX = cx + R * Math.sin(halfSpan); // 最右卡中心 x
+        const rightEdge = edgeCenterX + halfW;
+        if (rightEdge > vw + CONFIG.overflowPx) break;   // 超出允许量才停
+        n = test;
+      }
+      return n;
+    }
+
+    let fitCount = computeFitCount();
+    const COVER_COUNT = 19; // assets/cover1.jpg ~ cover19.jpg
+    const EXTRA = 2;        // 两侧各多一张缓冲卡，让传送带的“回收跳转”发生在屏外
+
+    // 每张封面的 [歌曲名(标题), 专辑名(小字)]，索引对应 coverN（用 MD5 与命名文件精确比对得出）。
+    // 规则：中文名只取英文；某一栏无英文则两栏都填仅有的那个英文。
+    const META = {
+      1:  ['LET ME LUV U', 'MOSLOS'],
+      2:  ['Shoot', 'Rebuild'],
+      3:  ['brother hood', 'Born 2 Be'],
+      4:  ["O'3300", 'THE OMNI ORACLE'],
+      5:  ['SUN DOWN', 'SUN DOWN'],
+      6:  ['National Treasures', 'ICEMAN'],
+      7:  ['What Can I Say', 'What Can I Say'],   // 咋说（口语，意为“还能说啥”）
+      8:  ['MVP', 'Small Town Legend'],
+      9:  ['What U Gon Do', 'NESA'],
+      10: ['I THINK I FELL IN <3', 'KILL THOME II'],
+      11: ['Freestyle', 'Freestyle'],
+      12: ['wintry rain', 'wintry rain'],
+      13: ['Murder', 'WHOISKIV'],
+      14: ['Scared 2 Be Lonely', 'Scared 2 Be Lonely'],
+      15: ['Forget it', 'nightfall EP'],
+      16: ['CN TOWER', '$ome $exy $ongs 4 U'],
+      17: ['Manta', 'Manta'],
+      18: ['Colt.45', 'Colt.45'],
+      19: ['Myself', 'GUOXIA'],
+    };
+
+    // 提取封面主色调：缩到小图取平均，偏灰/过暗过亮的像素降权，得到鲜明主色。
+    // 结果写到该卡 .card-info 的 --tint(供毛玻璃点光源叠加)。复用一个离屏 canvas。
+    const _cvs = document.createElement('canvas');
+    const _ctx = _cvs.getContext('2d', { willReadFrequently: true });
+    const _tintCache = {};
+    function applyCover(slotEl, src) {
+      const img = slotEl.querySelector('.card-cover img');
+      img.src = src;
+      // 按封面号填歌曲名(标题)与专辑名(小字)
+      const m = src.match(/cover(\d+)\.jpg/);
+      const meta = m && META[+m[1]];
+      if (meta) {
+        slotEl.querySelector('.card-title').textContent = meta[0];
+        slotEl.querySelector('.card-artist').textContent = meta[1];
+      }
+      const info = slotEl.querySelector('.card-info');
+      if (_tintCache[src]) { info.style.setProperty('--tint', _tintCache[src]); return; }
+      const probe = new Image();
+      probe.onload = () => {
+        const w = 24, h = 24;
+        _cvs.width = w; _cvs.height = h;
+        _ctx.drawImage(probe, 0, 0, w, h);
+        let data;
+        try { data = _ctx.getImageData(0, 0, w, h).data; } catch (e) { return; }
+        let r = 0, g = 0, b = 0, wsum = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const cr = data[i], cg = data[i + 1], cb = data[i + 2];
+          const mx = Math.max(cr, cg, cb), mn = Math.min(cr, cg, cb);
+          const sat = mx === 0 ? 0 : (mx - mn) / mx;       // 饱和度
+          const lum = (cr + cg + cb) / 3;
+          // 偏灰、过暗、过亮的像素降权，突出鲜明主色
+          const weight = (0.25 + sat) * (lum > 24 && lum < 235 ? 1 : 0.15);
+          r += cr * weight; g += cg * weight; b += cb * weight; wsum += weight;
+        }
+        if (wsum > 0) {
+          const tint = `${Math.round(r / wsum)}, ${Math.round(g / wsum)}, ${Math.round(b / wsum)}`;
+          _tintCache[src] = tint;
+          info.style.setProperty('--tint', tint);
+        }
+      };
+      probe.src = src;
+    }
+
+    const totalCards = Math.min(CONFIG.max, fitCount + EXTRA);
+    const slots = [];
+    for (let i = 0; i < totalCards; i++) {
+      const node = tpl.content.firstElementChild.cloneNode(true);
+      stage.appendChild(node);
+      // 每张卡用不同封面（循环取用）+ 提取主色调
+      applyCover(node, `assets/cover${(i % COVER_COUNT) + 1}.jpg`);
+      slots.push(node);
+    }
+
+    // 第 i 张最终停留角度：以 0° 居中对称铺开
+    function finalAngle(i, n) {
+      const gapDeg = gapRad() * 180 / Math.PI;
+      return (i - (n - 1) / 2) * gapDeg;
+    }
+
+    // ───────────────────────────────────────────────────────────
+    //  统一模型：入场 + 传送带合为一体，全程不停顿。
+    //  传送带从一开始就以恒定速度让整组左移（scroll 持续增长）。
+    //  每张卡 = 归属槽位角(base) - scroll + 入场偏移(off)。
+    //  off 用 power3.out 从“右侧屏外”衰减到 0：卡滑入后速度平滑收敛到
+    //  传送带速度(-C)，而不是收敛到 0 —— 所以卡一进来就并入匀速流，
+    //  不必等别人、也没有“全体静止→突然启动”的跳变。丝滑衔接。
+    // ───────────────────────────────────────────────────────────
+    let scroll = 0;                  // 传送带累计左移量(度)，从 0 持续增长
+    let coverCursor = totalCards;    // 初始已用 0..totalCards-1，回收时续号
+    const CONVEYOR_SPEED = 1.68;     // 度/秒，缓慢左移
+
+    const HOVER_LIFT = 80;           // 悬停上移(px)
+    const HOVER_SCALE = 0.10;        // 悬停放大比例(+10%)
+    const MAX_TILT = 14;             // 跟随鼠标的最大 3D 倾斜角(度)
+
+    function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+    function renderCard(cs) {
+      const p = pointAt(cs.base - scroll + cs.off);
+      // 入场进度：off 从 offStart 衰减到 0 → progress 0→1。缩放 90%→100% 随之收尾。
+      const progress = cs.offStart ? 1 - cs.off / cs.offStart : 1;
+      const enterScale = CONFIG.scale * (0.9 + 0.1 * progress);
+
+      // 悬停上移：沿卡片自身角度的"上"方向，而非屏幕垂直。
+      // 卡旋转了 p.rot 度，其本地上轴在屏幕里 = (sin(rot), -cos(rot))，
+      // 沿此方向抬 → 边上的卡也是顺着自己的径向往外上抬，不会朝中间挤、压缩邻卡间距。
+      const liftRad = p.rot * Math.PI / 180;
+      const lift = HOVER_LIFT * cs.hoverF;
+
+      // 槽位：圆弧定位 + 径向旋转 + 入场缩放 + 沿自身角度的悬停上移
+      gsap.set(cs.slot, {
+        xPercent: -50, yPercent: -50,
+        left: 0, top: 0,
+        x: p.x + Math.sin(liftRad) * lift,
+        y: p.y - Math.cos(liftRad) * lift,
+        rotation: p.rot,
+        scale: enterScale,
+      });
+
+      // 悬停层：放大(底部为原点) + 跟随鼠标 3D 倾斜
+      gsap.set(cs.hover, {
+        scale: 1 + HOVER_SCALE * cs.hoverF,
+        rotateX: cs.tiltX,
+        rotateY: cs.tiltY,
+      });
+
+      // 点光源遮罩：位置随鼠标，h=hoverF 驱动原地淡入淡出(半径固定，不塌缩)
+      gsap.set(cs.cover, {
+        '--mx': cs.spotX + '%',
+        '--my': cs.spotY + '%',
+        '--h': cs.hoverF,
+      });
+
+      // 毛玻璃点光源：封面主色调柔光，位置随鼠标，亮度由 hoverF 控制
+      gsap.set(cs.info, {
+        '--mx2': cs.glowX + '%',
+        '--my2': cs.glowY + '%',
+        '--h': cs.hoverF,
+      });
+    }
+
+    // base=归属槽位角; off=入场偏移; offStart=偏移初值; hoverF=悬停系数;
+    // tiltX/tiltY=当前3D倾斜; tTiltX/tTiltY=倾斜目标值
+    const cardState = slots.map((slot, i) => ({
+      slot,
+      hover: slot.querySelector('.card-hover'),
+      cover: slot.querySelector('.card-cover'),
+      card: slot.querySelector('.card'),
+      info: slot.querySelector('.card-info'),
+      base: 0, off: 0, offStart: 1,
+      hoverF: 0, tiltX: 0, tiltY: 0, tTiltX: 0, tTiltY: 0, isHover: false,
+      spotX: 50, spotY: 50,     // 封面点光源位置(%)
+      glowX: 50, glowY: 50,     // 毛玻璃点光源位置(%)
+      index: i,
+    }));
+
+    // 鼠标位置 + 每帧命中检测（卡片在动，用位置判断谁在鼠标下，而非 enter/leave）
+    let mouseX = -1, mouseY = -1;
+    window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+    window.addEventListener('mouseleave', () => { mouseX = -1; mouseY = -1; });
+
+    function updateHover() {
+      // 找鼠标正下方的卡（elementFromPoint 返回最上层，正好是视觉可见那张）
+      let hoveredSlot = null;
+      if (mouseX >= 0) {
+        const el = document.elementFromPoint(mouseX, mouseY);
+        const slotEl = el && el.closest('.card-slot');
+        if (slotEl) hoveredSlot = slotEl;
+      }
+      cardState.forEach((cs) => {
+        const isHover = cs.slot === hoveredSlot;
+        // 悬停状态翻转时才启动过渡，避免每帧重复创建 tween
+        if (isHover !== cs.isHover) {
+          cs.isHover = isHover;
+          cs.card.classList.toggle('hovered', isHover);   // 悬停时显示描边动画
+          if (isHover) startPreview(false, cs); else stopPreview(); // 悬停播高潮段，移走停
+          gsap.to(cs, {
+            hoverF: isHover ? 1 : 0,
+            duration: isHover ? 0.35 : 0.4,
+            ease: 'power2.out',
+            overwrite: 'auto',
+          });
+        }
+        if (isHover) {
+          // 鼠标相对卡中心的偏移 → 倾斜目标（向鼠标那侧倾）
+          const r = cs.slot.getBoundingClientRect();
+          const dx = (mouseX - (r.left + r.width / 2)) / (r.width / 2);
+          const dy = (mouseY - (r.top + r.height / 2)) / (r.height / 2);
+          cs.tTiltY = clamp(dx, -1, 1) * MAX_TILT;   // 鼠标偏右 → 绕Y正向倾
+          cs.tTiltX = clamp(-dy, -1, 1) * MAX_TILT;  // 鼠标偏上 → 绕X正向倾
+          // 点光源圆心 = 鼠标屏幕位置，换算成各自框的百分比。
+          // 不 clamp：圆心可落在框外，于是同一个圆能横跨封面/玻璃接缝，
+          // 鼠标在哪侧哪侧亮、另一侧只露出溢出的圆弧 → 看着是一团光。
+          const cr = cs.cover.getBoundingClientRect();
+          cs.spotX = (mouseX - cr.left) / cr.width * 100;
+          cs.spotY = (mouseY - cr.top) / cr.height * 100;
+          const ir = cs.info.getBoundingClientRect();
+          cs.glowX = (mouseX - ir.left) / ir.width * 100;
+          cs.glowY = (mouseY - ir.top) / ir.height * 100;
+        } else {
+          cs.tTiltX = 0; cs.tTiltY = 0;
+        }
+      });
+    }
+
+    (function initEntrance() {
+      const n = cardState.length;
+      cardState.forEach((cs, i) => {
+        cs.base = finalAngle(i, n);
+        cs.off = CONFIG.startAngle - cs.base;   // 起始落在 startAngle(右侧屏外)
+        cs.offStart = cs.off;                   // 记录初值，缩放进度据此计算
+        renderCard(cs);
+        // off 衰减到 0：卡从右侧滑入并入匀速流；power3.out 末速→ -C，连续不停顿
+        const dur = Math.max(0.7, Math.abs(cs.off) / CONFIG.speed);
+        gsap.to(cs, {
+          off: 0,
+          duration: dur,
+          delay: i * CONFIG.stagger,            // 最左(i=0)先出发，出来即随流移动
+          ease: 'power3.out',
+        });
+      });
+    })();
+
+    // 单一渲染循环：传送带始终匀速左移、回收换封面、流动不停。
+    //  被选中（居中漂浮）的那张跳过，由 GSAP/漂浮独立驱动；其余卡照常随传送带流动，
+    //  即使正在像素消散也继续滑行 —— 循环动画不停。悬停命中仅在 flow 时生效。
+    let mode = 'flow';            // 'flow' | 'busy' | 'selected'
+    let selectedCS = null;        // 被选中（居中漂浮）的卡
+    let returningCS = null;       // 正在飞回传送带的卡（逐帧向实时位置插值）
+    let stopSelectedDrift = null; // 选中卡的漂浮停止句柄
+
+    let loopLast = performance.now();
+    function frame(now) {
+      const dt = (now - loopLast) / 1000;
+      loopLast = now;
+
+      scroll += CONVEYOR_SPEED * dt;                    // 始终推进，循环不停
+      sampleBeat();                                     // 读节奏能量(驱动倾斜)
+      if (mode === 'flow') updateHover();               // 命中检测仅在传送带态
+
+      const n = cardState.length;
+      const gapDeg = gapRad() * 180 / Math.PI;
+      const period = n * gapDeg;                        // 循环角度周期
+      const leftLimit = finalAngle(0, n) - gapDeg * 0.5; // 屏外左侧回收点
+      const k = 1 - Math.pow(0.001, dt);
+
+      cardState.forEach((cs) => {
+        if (cs === selectedCS) return;                  // 居中漂浮的卡不走传送带
+        const angle = cs.base - scroll + cs.off;
+        if (cs !== returningCS && angle < leftLimit) {
+          cs.base += period;                            // 跳到队尾（右侧屏外）
+          applyCover(cs.slot, `assets/cover${(coverCursor % COVER_COUNT) + 1}.jpg`); // 换新封面+主色调
+          coverCursor++;
+        }
+        // 倾斜平滑趋近目标（指数插值，帧率无关）
+        cs.tiltX += (cs.tTiltX - cs.tiltX) * k;
+        cs.tiltY += (cs.tTiltY - cs.tiltY) * k;
+
+        if (cs === returningCS) {
+          // 飞回：slot 与 hover 都从“居中起点”向各自归宿用同一 retF 插值，单一缓动、无冲突
+          const p = pointAt(cs.base - scroll + cs.off);
+          const f = cs.retF, g = 1 - f;
+          gsap.set(cs.slot, {
+            xPercent: -50, yPercent: -50, left: 0, top: 0,
+            x: cs.retFrom.x * g + p.x * f,
+            y: cs.retFrom.y * g + p.y * f,
+            rotation: cs.retFrom.rot * g + p.rot * f,
+            scale: cs.retFrom.scale * g + CONFIG.scale * f,
+          });
+          const rh = cs.retHover;
+          gsap.set(cs.hover, {
+            x: rh.x * g, y: rh.y * g,
+            rotateX: rh.rx * g, rotateY: rh.ry * g, rotateZ: rh.rz * g,
+            scale: rh.scale * g + 1 * f,
+          });
+        } else {
+          renderCard(cs);
+        }
+      });
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    // ───────────────────────────────────��───────────────────────
+    //  点击交互：点某张卡 → 它飞到屏幕中央接上无规则漂浮，其余卡像素消散。
+    //  再次点击（中间那张/任意处）→ 其余卡像素聚拢复原，中间卡飞回传送带。
+    // ───────────────────────────────────────────────────────────
+    function clearAllHover() {
+      cardState.forEach((cs) => {
+        cs.isHover = false;
+        cs.card.classList.remove('hovered');
+        gsap.to(cs, { hoverF: 0, duration: 0.25, overwrite: 'auto' });
+        cs.tTiltX = 0; cs.tTiltY = 0;
+      });
+    }
+
+    function select(cs) {
+      if (mode !== 'flow') return;
+      mode = 'busy';
+      selectedCS = cs;
+      clearAllHover();
+
+      // 1) 被选中卡：飞到屏幕中央、正过来、放大；落定后接上漂浮 + 描边
+      cs.card.classList.add('playing');
+      fadeCoverGray(cs, 0);                  // 封面平滑显全色
+      // 底部渐变切到该卡主色调(同色系缓慢变化)；描边保持白色不变
+      const tint = (getComputedStyle(cs.info).getPropertyValue('--tint') || '255,255,255').trim();
+      startBloom(tint);
+      startPreview(true, cs);                // 点开→从头完整播放整首(节奏驱动倾斜)
+      showClipMV(cs);                         // 顶部覆盖该卡 MV(静音)
+      showLyrics(coverNumOf(cs));             // 卡片下方显示当前行歌词(ASCII 波动)
+      // 点光源(--h)只由 renderCard 写，选中后 renderCard 不再跑 → 会冻在点击时的值。
+      // 这里显式把它平滑归零，避免返回时残留的光斑“洞”突然闭合造成卡顿。
+      gsap.to([cs.cover, cs.info], { '--h': 0, duration: 0.4, ease: 'power2.out' });
+      cs.slot.style.zIndex = '100';          // 升到最高层，飞行/居中时不被邻卡盖住
+      gsap.killTweensOf(cs);                 // 停掉它残留的入场/悬停 tween
+      // 漂浮在飞行途中就启动(作用于 hover 层)，到中心时已在运动 → 与飞入无缝衔接、不停顿
+      if (stopSelectedDrift) stopSelectedDrift();
+      stopSelectedDrift = startDrift(cs.hover);
+      gsap.to(cs.slot, {
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+        rotation: 0,
+        scale: CONFIG.scale * 1.18,
+        duration: 0.9,
+        ease: 'power2.out',                  // 末段平缓收尾，不急停
+        onComplete: () => { mode = 'selected'; },
+      });
+
+      // 2) 其余卡：原地模糊 + 淡出（弥散模糊消失）
+      cardState.forEach((other) => {
+        if (other === cs) return;
+        dissolveCard(other, () => { other.slot.style.visibility = 'hidden'; });
+      });
+    }
+
+    function returnToFlow() {
+      if (mode !== 'selected') return;
+      mode = 'busy';
+      const cs = selectedCS;
+      selectedCS = null;              // 立刻交给 returningCS 接管插值，否则 frame 会整段跳过它→冻在中心后突变
+
+      // 停漂浮（记录 hover 当前漂浮位移/旋转作为插值起点，逐帧归零，避免和 set 冲突）
+      if (stopSelectedDrift) { stopSelectedDrift(); stopSelectedDrift = null; }
+      gsap.killTweensOf(cs.hover);
+      cs.retHover = {
+        x: +gsap.getProperty(cs.hover, 'x'),
+        y: +gsap.getProperty(cs.hover, 'y'),
+        rx: +gsap.getProperty(cs.hover, 'rotateX'),
+        ry: +gsap.getProperty(cs.hover, 'rotateY'),
+        rz: +gsap.getProperty(cs.hover, 'rotateZ'),
+        scale: +gsap.getProperty(cs.hover, 'scale'),
+      };
+      cs.hoverF = 0; cs.tiltX = 0; cs.tiltY = 0; cs.tTiltX = 0; cs.tTiltY = 0;
+
+      // base 归位到可见带内（选中期间 scroll 一直涨而 base 没动）
+      const nn = cardState.length;
+      const gapDeg2 = gapRad() * 180 / Math.PI;
+      const period2 = nn * gapDeg2;
+      const leftLimit2 = finalAngle(0, nn) - gapDeg2 * 0.5;
+      while (cs.base - scroll + cs.off < leftLimit2) cs.base += period2;
+
+      // 记录当前(居中)变换作为起点，逐帧向“实时传送带位置”插值 → 收尾与 renderCard 完全一致，无跳变
+      gsap.killTweensOf(cs.slot);
+      cs.retFrom = {
+        x: +gsap.getProperty(cs.slot, 'x'),
+        y: +gsap.getProperty(cs.slot, 'y'),
+        rot: +gsap.getProperty(cs.slot, 'rotation'),
+        scale: +gsap.getProperty(cs.slot, 'scale'),
+      };
+      cs.retF = 0;
+      returningCS = cs;
+      cs.card.classList.remove('playing');
+      fadeCoverGray(cs, 1);                  // 封面平滑变回灰度
+      stopBloom();                           // 底部渐变淡回灰调
+      stopPreview();                         // 停止高潮预览
+      hideClipMV();                          // 顶部 MV 淡出 → 露出默认视频(从上次位置续播)
+      hideLyrics();                          // 歌词淡出
+      gsap.to(cs, {
+        retF: 1, duration: 0.7, ease: 'power2.inOut',
+        onComplete: () => {
+          cs.slot.style.zIndex = '';         // 还原层级
+          returningCS = null;
+          mode = 'flow';
+        },
+      });
+
+      // 其余卡：恢复可见 + 从模糊中聚焦显现
+      cardState.forEach((other) => {
+        if (other === cs) return;
+        other.slot.style.visibility = '';
+        reformCard(other);
+      });
+    }
+
+    window.addEventListener('click', (e) => {
+      if (mode === 'selected') { returnToFlow(); return; }
+      if (mode !== 'flow') return;
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const slotEl = el && el.closest('.card-slot');
+      if (!slotEl) return;
+      const cs = cardState.find((c) => c.slot === slotEl);
+      if (cs) select(cs);
+    });
+
+    // 窗口尺寸变化时按当前角度即时归位（不重播入场；数量变化暂不重建）
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        cardState.forEach(renderCard);
+      }, 150);
+    });
   </script>
 </body>
 </html>

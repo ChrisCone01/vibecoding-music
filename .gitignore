@@ -1,0 +1,8 @@
+# 大体积媒体：不入库(体积太大/限速)。到公司后按 README 重新放置即可。
+assets/audio/
+assets/video/
+
+# 系统/编辑器杂项
+.DS_Store
+Thumbs.db
+*.log
