@@ -20,6 +20,15 @@
       font-display: swap;
     }
 
+    /* 爱点风雅黑长体（歌词中文用，商用免费） */
+    @font-face {
+      font-family: 'AiDianFengYaHei';
+      src: url('assets/fonts/AiDianFengYaHei.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
     * {
       margin: 0;
       padding: 0;
@@ -155,13 +164,123 @@
       font-weight: 600;
       font-size: 30px;
       line-height: 1.3;
+      letter-spacing: 0.05em;   /* 整体字间距拉开 5% */
       color: #fff;
-      text-shadow: 0 2px 18px rgba(0,0,0,0.55);
+      text-shadow: 0 2px 18px rgba(0,0,0,0.347);   /* 投影透明度再降 10% */
     }
     #lyric-split .ls-char {
       display: inline-block;
       white-space: pre;       /* 保留空格 */
       will-change: transform, opacity;
+    }
+    /* 中文用爱点风雅黑长体，并缩到与英文(Fraunces)视觉等高(方块字同字号偏大，故略缩) */
+    #lyric-split .ls-cn {
+      font-family: 'AiDianFengYaHei', sans-serif;
+      font-size: 0.984em;
+      font-weight: 400;
+      letter-spacing: 0.1em;   /* 中文字间距比英文再大 5% */
+    }
+
+    /* 首页搜索热区：大块透明可点区(好点)，中间用 ::before 画纯白竖线 */
+    #search-caret {
+      position: fixed;
+      left: 50%;
+      top: 93vh;
+      transform: translate(-50%, -50%);
+      width: 220px;
+      height: 90px;
+      z-index: 40;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #search-caret::before {
+      content: '';
+      width: 6px;
+      height: 34px;
+      background: #fff;
+    }
+    #search-caret.hide { display: none; }   /* 播放页隐藏 */
+
+    /* 搜索模式覆盖层：全屏高斯模糊(背后视频/圆弧仍在动)。
+       常驻 DOM，靠 opacity/visibility 过渡 → 模糊随透明度平滑淡入淡出(非硬切)。 */
+    #search-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      backdrop-filter: blur(26px) brightness(0.7);
+      -webkit-backdrop-filter: blur(26px) brightness(0.7);
+      background: rgba(0, 0, 0, 0.18);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.5s ease, visibility 0s linear 0.5s;
+    }
+    #search-overlay.on {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 0.5s ease, visibility 0s;
+    }
+
+    /* 大字输入框：用歌词字体(Fraunces)，原生白色闪烁光标 */
+    #search-input {
+      width: 80vw;
+      max-width: 1100px;
+      background: transparent;
+      border: none;
+      outline: none;
+      text-align: center;
+      font-family: 'Fraunces', Georgia, serif;
+      font-weight: 600;
+      font-size: 120px;
+      line-height: 1.2;
+      color: #fff;
+      caret-color: #fff;
+      letter-spacing: 0.02em;
+      text-shadow: 0 2px 24px rgba(0, 0, 0, 0.4);
+      caret-color: transparent;   /* 隐藏原生光标，用自定义粗光标 */
+    }
+    #search-input::placeholder { color: rgba(255,255,255,0.25); }
+
+    /* 自定义粗光标(原生 3 倍粗)：跟随文字末尾，闪烁 */
+    #search-thickcaret {
+      position: fixed;
+      width: 18px;                /* 原生约6px → 3倍 */
+      background: #fff;
+      pointer-events: none;
+      display: none;
+      animation: thickcaret-blink 1.06s steps(1, end) infinite;
+    }
+    #search-overlay.on #search-thickcaret { display: block; }
+    @keyframes thickcaret-blink {
+      0%, 50% { opacity: 1; }
+      50.01%, 100% { opacity: 0; }
+    }
+    /* 隐形测量元素：与输入框同字体，用来算文字宽度以定位粗光标 */
+    #search-measure {
+      position: fixed;
+      visibility: hidden;
+      white-space: pre;
+      font-family: 'Fraunces', Georgia, serif;
+      font-weight: 600;
+      font-size: 120px;
+      letter-spacing: 0.02em;
+    }
+
+    /* 搜索进度：纯数字百分比 */
+    #search-progress {
+      margin-top: 40px;
+      font-family: 'Fraunces', Georgia, serif;
+      font-weight: 600;
+      font-size: 40px;
+      color: rgba(255, 255, 255, 0.85);
+      min-height: 48px;
     }
 
     /* 每张卡的“槽位”：负责扇形定位/旋转/缩放与入场位移，
@@ -364,6 +483,17 @@
 
   <div id="stage"></div>
 
+  <!-- 首页搜索：圆弧下方空地正中的纯白闪烁光标(竖线) -->
+  <div id="search-caret"></div>
+
+  <!-- 搜索模式：全屏高斯模糊(视频/圆弧仍在动) + 居中大字输入 + 进度 -->
+  <div id="search-overlay">
+    <input id="search-input" type="text" autocomplete="off" spellcheck="false" maxlength="40">
+    <div id="search-thickcaret"></div>
+    <span id="search-measure"></span>
+    <div id="search-progress"></div>
+  </div>
+
   <!-- 点开卡片后的当前行歌词(SplitText 逐字符进场)，居中卡片下方 -->
   <div id="lyric-split"></div>
 
@@ -388,17 +518,23 @@
   <script>
     const rand = (min, max) => Math.random() * (max - min) + min;
 
+    // 媒体(音频/视频)CDN 前缀：本地开发留空(走相对路径 assets/...)，
+    // 部署时设为 R2 公开域名(末尾带/)，如 'https://media.example.com/' 或 'https://pub-xxxx.r2.dev/'。
+    // 只作用于 audio/video；封面/歌词/字体随 Pages 一起走相对路径。
+    const MEDIA_BASE = '';
+    const mediaURL = (p) => MEDIA_BASE + p;
+
     // 顶部默认 MV = 随机混剪：随机挑一个 MV、随机播一段(14~26s)，到点切下一个；
     // 声音段间渐入渐出、画面切换短暂淡一下，避免硬切。点卡片时此层被静音/盖住，收回后继续。
     (function mvMontage() {
       const v = document.querySelector('.mv-video');
       if (!v) return;
+      // 顶部混剪也走网易云在线 MV(经 /ncm/mv 代理)，不打包本地视频
       const POOL = [
-        'assets/video/mv1.mp4','assets/video/mv3.mp4','assets/video/mv4.mp4','assets/video/mv5.mp4',
-        'assets/video/mv6.mp4','assets/video/mv7.mp4','assets/video/mv8.mp4','assets/video/mv9.mp4',
-        'assets/video/mv10.mp4','assets/video/mv11.mp4','assets/video/mv12.mp4','assets/video/mv13.mp4',
-        'assets/video/mv14.mp4','assets/video/mv15.mp4','assets/video/mv16.mp4','assets/video/mv17.mp4',
-        'assets/video/mv18.mp4','assets/video/mv19.mp4','assets/video/mvdefault.mp4',
+        '/ncm/mv?id=34761701','/ncm/mv?id=34706616','/ncm/mv?id=34751385','/ncm/mv?id=34757251',
+        '/ncm/mv?id=34729454','/ncm/mv?id=34727733','/ncm/mv?id=22622183','/ncm/mv?id=14690698',
+        '/ncm/mv?id=14688686','/ncm/mv?id=14592670','/ncm/mv?id=10907250','/ncm/mv?id=34746338',
+        '/ncm/mv?id=34715231','/ncm/mv?id=22781835','/ncm/mv?id=34757741',
       ];
       const VOL = 0.35;                 // 混剪音量(首次交互后才出声)
       const FADE = 1.1;                 // 声音/画面渐变时长(秒)
@@ -435,8 +571,8 @@
               onComplete: playSegment });
           }, Math.max(2000, ms));
         };
-        if (v.getAttribute('src') !== src) {
-          v.src = src;
+        if (v.getAttribute('src') !== mediaURL(src)) {
+          v.src = mediaURL(src);
           const onmeta = () => { v.removeEventListener('loadedmetadata', onmeta); startPlay(); };
           v.addEventListener('loadedmetadata', onmeta);
           v.load();
@@ -458,40 +594,44 @@
 
     // 歌曲高潮预览 + 节奏分析(Web Audio)：悬停从高潮段循环播放，点开整首播放，
     // AnalyserNode 读低频鼓点能量 -> audioBeat 驱动选中卡 3D 倾斜跟节奏。
-    // 每个封面号对应自己的歌(无歌的封面不播)。start/end 为高潮段(秒)。
-    const AUDIO = {
-      1:  { file: 'assets/audio/audio1.mp3',  start: 27,  end: 51 },   // LET ME LUV U
-      2:  { file: 'assets/audio/audio2.mp3',  start: 19,  end: 33 },   // Shoot
-      3:  { file: 'assets/audio/audio3.mp3',  start: 31,  end: 48 },   // brother hood
-      4:  { file: 'assets/audio/audio4.mp3',  start: 13,  end: 51 },   // O'3300
-      5:  { file: 'assets/audio/audio5.mp3',  start: 9,   end: 26 },   // SUN DOWN
-      6:  { file: 'assets/audio/audio6.mp3',  start: 23,  end: 82 },   // National Treasures
-      7:  { file: 'assets/audio/audio7.mp3',  start: 114, end: 168 },  // 咋说 / What Can I Say
-      8:  { file: 'assets/audio/audio8.mp3',  start: 38,  end: 63 },   // MVP
-      9:  { file: 'assets/audio/audio9.mp3',  start: 84,  end: 117 },  // What U Gon Do
-      10: { file: 'assets/audio/audio10.mp3', start: 11,  end: 31 },   // I THINK I FELL IN <3
-      11: { file: 'assets/audio/audio11.mp3', start: 27,  end: 55 },   // Freestyle
-      12: { file: 'assets/audio/audio12.mp3', start: 52,  end: 77 },   // wintry rain / 冷色晚风
-      13: { file: 'assets/audio/audio13.mp3', start: 32,  end: 47 },   // Murder
-      14: { file: 'assets/audio/audio14.mp3', start: 82,  end: 104 },  // Scared 2 Be Lonely
-      15: { file: 'assets/audio/audio15.mp3', start: 122, end: 196 },  // Forget it
-      16: { file: 'assets/audio/audio16.mp3', start: 167, end: 222 },  // CN TOWER
-      17: { file: 'assets/audio/audio17.mp3', start: 60,  end: 80 },   // Manta
-      18: { file: 'assets/audio/audio18.mp3', start: 75,  end: 91 },   // Colt.45
-      19: { file: 'assets/audio/audio19.mp3', start: 45,  end: 62 },   // Myself
+    // 数据全部来自网易云(经 server.js /ncm 代理转同源)：id=网易云 songId，
+    // start/end=高潮段(秒，先按本地经验值，版本不同可后调)。封面/歌词也按 id 取。
+    const SONGS = {
+      1:  { id: 2085859568, start: 27,  end: 51 },   // LET ME LUV U
+      2:  { id: 3386453711, start: 19,  end: 33 },   // Shoot
+      3:  { id: 1441576957, start: 31,  end: 48 },   // brother hood
+      4:  { id: 3324558683, start: 13,  end: 51 },   // O'3300
+      5:  { id: 3353721067, start: 9,   end: 26 },   // SUN DOWN
+      6:  { id: 3382153693, start: 23,  end: 82 },   // National Treasures
+      7:  { id: 2042350565, start: 114, end: 168 },  // 咋说
+      8:  { id: 1832633298, start: 38,  end: 63 },   // MVP
+      9:  { id: 1995339653, start: 84,  end: 117 },  // What U Gon Do
+      10: { id: 2706222841, start: 11,  end: 31 },   // I THINK I FELL IN <3
+      11: { id: 2162961548, start: 27,  end: 55 },   // 数学题Freestyle
+      12: { id: 2656164256, start: 52,  end: 77 },   // 冷色晚风
+      13: { id: 1857349364, start: 32,  end: 47 },   // 谋杀 Murder
+      14: { id: 2062751869, start: 82,  end: 104 },  // Scared 2 Be Lonely
+      15: { id: 2122615322, start: 122, end: 196 },  // Forget it
+      16: { id: 2675115716, start: 167, end: 222 },  // CN TOWER
+      17: { id: 1409329965, start: 60,  end: 80 },   // Manta
+      18: { id: 1499560899, start: 75,  end: 91 },   // Colt.45
+      19: { id: 2617357552, start: 45,  end: 62 },   // Myself
+      20: { id: 1411157152, start: 50,  end: 70 },   // MY BACK (mac ova seas) 时长234s
     };
+    const AUDIO = SONGS;   // 兼容旧引用���
+    const PIC = {};        // 封面号 -> 代理后的网易云封面图 URL(启动时预取)
     const audioEl = new Audio();
     audioEl.loop = false; audioEl.preload = 'auto'; audioEl.volume = 0;
+    // 音频经 /ncm/audio 代理为同源(server.js 加了 CORS)，Web Audio 分析正常，无需 crossOrigin。
     let actx = null, analyser = null, freqData = null;
     let audioBeat = 0;
     let previewToken = 0;
     let curSeg = { start: 0, end: 0 };        // 当前曲的高潮段
 
-    // 由卡当前封面图取封面号(1..19)
+    // 由卡的 data-cover 取封面号(1..19)；封面号是音频/MV/歌词的总钥匙
     function coverNumOf(cs) {
-      const img = cs && cs.slot.querySelector('.card-cover img');
-      const m = img && img.src.match(/cover(\d+)\.jpg/);
-      return m ? +m[1] : 0;
+      const n = cs && cs.slot && +cs.slot.dataset.cover;
+      return n || 0;
     }
 
     function ensureAudioGraph() {
@@ -541,9 +681,10 @@
         audioEl._loopHandler = null;
       }
 
-      // 切歌：换 src 后等可播放再定位/播放；同一首则直接开始
-      if (audioEl.getAttribute('src') !== info.file) {
-        audioEl.src = info.file;
+      // 切歌：换 src 后等可播放再定位/播放；同一首则直接开始。音频走 /ncm/audio 代理(同源)
+      const audioSrc = '/ncm/audio?id=' + info.id + '&level=exhigh';
+      if (audioEl.getAttribute('src') !== audioSrc) {
+        audioEl.src = audioSrc;
         const onready = () => { audioEl.removeEventListener('loadeddata', onready); if (my === previewToken) begin(); };
         audioEl.addEventListener('loadeddata', onready);
         audioEl.load();
@@ -587,19 +728,35 @@
 
     // ── 点击后顶部 MV 覆盖：按封面号放该卡 MV(静音)，收回淡出；默认视频常驻底层不重播 ──
     // cover2(Shoot) 无 MV → 用默认视频(不覆盖)。
-    const MV = {
-      1: 'assets/video/mv1.mp4',  3: 'assets/video/mv3.mp4',  4: 'assets/video/mv4.mp4',
-      5: 'assets/video/mv5.mp4',  6: 'assets/video/mv6.mp4',  7: 'assets/video/mv7.mp4',
-      8: 'assets/video/mv8.mp4',  9: 'assets/video/mv9.mp4',  10: 'assets/video/mv10.mp4',
-      11: 'assets/video/mv11.mp4', 12: 'assets/video/mv12.mp4', 13: 'assets/video/mv13.mp4',
-      14: 'assets/video/mv14.mp4', 15: 'assets/video/mv15.mp4', 16: 'assets/video/mv16.mp4',
-      17: 'assets/video/mv17.mp4', 18: 'assets/video/mv18.mp4', 19: 'assets/video/mv19.mp4',
+    const MV_POOL = {
+      1: [34761701, 34728475, 22710731, 22684261, 22691807, 22691020],
+      2: [34761701, 34728475, 22710731, 22684261, 22691807, 22691020],
+      3: [34761701, 34728475, 22710731, 22684261, 22691807, 22691020],
+      4: [34706616, 34751385, 34740003, 34733782, 34715083, 34701238],
+      5: [34751385, 34740003, 34733782, 34715083, 34706616, 34701238],
+      6: [34757251, 34758572, 34757404, 34758349, 34757369, 34757357],
+      7: [],
+      8: [34729454, 34719302, 34712589, 34713543, 34703419, 22793691],
+      9: [34729454, 34719302, 34712589, 34713543, 34703419, 22793691],
+      10: [22758945, 34727733, 34701892, 22753520, 22748878, 22642525],
+      11: [34727733, 34701892, 22758945, 22753520, 22748878, 22642525],
+      12: [22622183, 22605972, 22602392, 14633501, 14613416],
+      13: [14690698, 14689870, 14690699, 14689871, 14648635, 14592000],
+      14: [14688686, 34714012, 34699179, 34697144, 22765592, 22618390],
+      15: [22691018],
+      16: [14592670, 14193836, 10971118, 10940707, 14194868, 10924038],
+      17: [10907250, 34732763, 34704859, 22792689, 22767682, 22756592],
+      18: [34746338, 34757741, 22659751, 34752726, 14655346, 14655363],
+      19: [34715231, 22781835, 22771636, 22651740, 22609417, 22606569],
+      20: [34761701, 34728475, 22710731, 22684261, 22691807, 22691020],
     };
     const mvClip = document.querySelector('.mv-clip');
 
     function showClipMV(cs) {
-      const src = MV[coverNumOf(cs)];
-      if (!mvClip || !src) { hideClipMV(); return; }   // 无 MV：保持默认视频
+      const pool = MV_POOL[coverNumOf(cs)] || [];
+      if (!mvClip || !pool.length) { hideClipMV(); return; }   // 无候选：保持默认混剪视频
+      const mvid = pool[(Math.random() * pool.length) | 0];    // 随机挑一支网易云 MV
+      const src = `/ncm/mv?id=${mvid}`;
       if (mvClip.getAttribute('src') !== src) { mvClip.src = src; }
       mvClip.muted = true;                              // 有音乐了，MV 不出声
       mvClip.currentTime = 0;
@@ -624,10 +781,19 @@
 
     function loadLyrics(num) {
       lyricLines = [];
-      fetch(`assets/lyrics/lyrics${num}.lrc`).then(r => r.ok ? r.text() : "").then(txt => {
+      const song = SONGS[num];
+      if (!song) return;
+      fetch(`/ncm/api/lyric?id=${song.id}`).then(r => r.ok ? r.json() : null).then(j => {
+        const txt = (j && j.lrc && j.lrc.lyric) || '';
         txt.split(/\r?\n/).forEach(line => {
-          const m = line.match(/^\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)$/);
-          if (m && m[3].trim()) lyricLines.push({ t: (+m[1]) * 60 + parseFloat(m[2]), text: m[3].trim() });
+          // 一行可能有多个时间戳 [mm:ss.xx][mm:ss.xx]词
+          const times = line.match(/\[(\d+):(\d+(?:\.\d+)?)\]/g) || [];
+          const text = line.replace(/\[(\d+):(\d+(?:\.\d+)?)\]/g, '').trim();
+          if (!text) return;
+          times.forEach(tg => {
+            const mm = tg.match(/\[(\d+):(\d+(?:\.\d+)?)\]/);
+            if (mm) lyricLines.push({ t: (+mm[1]) * 60 + parseFloat(mm[2]), text });
+          });
         });
         lyricLines.sort((a, b) => a.t - b.t);
       }).catch(() => {});
@@ -648,7 +814,7 @@
       const spans = [];
       for (const chRaw of Array.from(text)) {
         const span = document.createElement("span");
-        span.className = "ls-char";
+        span.className = hasCJK(chRaw) ? "ls-char ls-cn" : "ls-char";  // 中文字符用风雅黑长体
         span.textContent = chRaw === " " ? " " : chRaw;
         frag.appendChild(span);
         spans.push(span);
@@ -657,13 +823,12 @@
       gsap.killTweensOf(spans);
       gsap.fromTo(spans,
         { opacity: 0, y: 40 },
-        { opacity: 1, y: 0, duration: 1.25, ease: "power3.out", stagger: 0.05, force3D: true });
+        { opacity: 1, y: 0, duration: 0.62, ease: "power3.out", stagger: 0.025, force3D: true });
     }
 
     function lyricFrame() {
       lyricRAF = requestAnimationFrame(lyricFrame);
       let line = lyricAt(audioEl.currentTime || 0);
-      if (hasCJK(line)) line = "";          // 含中文的行暂不显示
       if (line === lyricLine) return;
       lyricLine = line;
       if (line) splitReveal(line); else lyricEl.innerHTML = "";
@@ -879,7 +1044,7 @@
       };
     }
 
-    // 由“10px 卡间距”换算成相邻卡的角度间隔（弧度）：
+    // 由“卡间距”换算成相邻卡的角度间隔（弧度）：
     // 相邻卡中心弦长 = 卡宽 + 间距，弦长对应的圆心角
     function gapRad() {
       const { R } = circle();
@@ -906,7 +1071,7 @@
     }
 
     let fitCount = computeFitCount();
-    const COVER_COUNT = 19; // assets/cover1.jpg ~ cover19.jpg
+    const COVER_COUNT = 20; // 20 首歌(封面/音频/歌词来自网易云 SONGS 表)
     const EXTRA = 2;        // 两侧各多一张缓冲卡，让传送带的“回收跳转”发生在屏外
 
     // 每张封面的 [歌曲名(标题), 专辑名(小字)]，索引对应 coverN（用 MD5 与命名文件精确比对得出）。
@@ -931,6 +1096,7 @@
       17: ['Manta', 'Manta'],
       18: ['Colt.45', 'Colt.45'],
       19: ['Myself', 'GUOXIA'],
+      20: ['MY BACK', 'mac ova seas'],
     };
 
     // 提取封面主色调：缩到小图取平均，偏灰/过暗过亮的像素降权，得到鲜明主色。
@@ -938,12 +1104,13 @@
     const _cvs = document.createElement('canvas');
     const _ctx = _cvs.getContext('2d', { willReadFrequently: true });
     const _tintCache = {};
-    function applyCover(slotEl, src) {
+    function applyCover(slotEl, num) {
+      slotEl.dataset.cover = num;                       // 封面号存 DOM(音频/MV/歌词据此)
       const img = slotEl.querySelector('.card-cover img');
+      // 封面优先用网易云(代理同源)，未预取到则暂用本地 jpg 兜底
+      const src = PIC[num] || `assets/cover${num}.jpg`;
       img.src = src;
-      // 按封面号填歌曲名(标题)与专辑名(小字)
-      const m = src.match(/cover(\d+)\.jpg/);
-      const meta = m && META[+m[1]];
+      const meta = META[num];
       if (meta) {
         slotEl.querySelector('.card-title').textContent = meta[0];
         slotEl.querySelector('.card-artist').textContent = meta[1];
@@ -982,7 +1149,7 @@
       const node = tpl.content.firstElementChild.cloneNode(true);
       stage.appendChild(node);
       // 每张卡用不同封面（循环取用）+ 提取主色调
-      applyCover(node, `assets/cover${(i % COVER_COUNT) + 1}.jpg`);
+      applyCover(node, (i % COVER_COUNT) + 1);
       slots.push(node);
     }
 
@@ -1009,16 +1176,14 @@
     const MAX_TILT = 14;             // 跟随鼠标的最大 3D 倾斜角(度)
 
     function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+    function progressOf(cs) { return cs.offStart ? 1 - cs.off / cs.offStart : 1; }  // 入场进度 0→1
 
     function renderCard(cs) {
       const p = pointAt(cs.base - scroll + cs.off);
       // 入场进度：off 从 offStart 衰减到 0 → progress 0→1。缩放 90%→100% 随之收尾。
-      const progress = cs.offStart ? 1 - cs.off / cs.offStart : 1;
-      const enterScale = CONFIG.scale * (0.9 + 0.1 * progress);
+      const enterScale = CONFIG.scale * (0.9 + 0.1 * progressOf(cs));
 
       // 悬停上移：沿卡片自身角度的"上"方向，而非屏幕垂直。
-      // 卡旋转了 p.rot 度，其本地上轴在屏幕里 = (sin(rot), -cos(rot))，
-      // 沿此方向抬 → 边上的卡也是顺着自己的径向往外上抬，不会朝中间挤、压缩邻卡间距。
       const liftRad = p.rot * Math.PI / 180;
       const lift = HOVER_LIFT * cs.hoverF;
 
@@ -1068,6 +1233,21 @@
       glowX: 50, glowY: 50,     // 毛玻璃点光源位置(%)
       index: i,
     }));
+
+    // 预取 19 首网易云封面(代理同源)，到手后把卡片从本地兜底图刷成网易云封面
+    (function prefetchPics() {
+      const ids = Object.keys(SONGS).map(n => SONGS[n].id).join(',');
+      fetch(`/ncm/api/song/detail?ids=${ids}`).then(r => r.ok ? r.json() : null).then(j => {
+        if (!j || !j.songs) return;
+        const byId = {}; j.songs.forEach(s => { byId[s.id] = s; });
+        Object.keys(SONGS).forEach(n => {
+          const s = byId[SONGS[n].id];
+          if (s && s.al && s.al.picUrl) PIC[n] = '/ncm/img?u=' + encodeURIComponent(s.al.picUrl + '?param=512y512');
+        });
+        // 刷新当前在场卡片的封面(用各自 data-cover)
+        cardState.forEach(cs => { const n = +cs.slot.dataset.cover; if (PIC[n]) applyCover(cs.slot, n); });
+      }).catch(() => {});
+    })();
 
     // 鼠标位置 + 每帧命中检测（卡片在动，用位置判断谁在鼠标下，而非 enter/leave）
     let mouseX = -1, mouseY = -1;
@@ -1164,7 +1344,7 @@
         const angle = cs.base - scroll + cs.off;
         if (cs !== returningCS && angle < leftLimit) {
           cs.base += period;                            // 跳到队尾（右侧屏外）
-          applyCover(cs.slot, `assets/cover${(coverCursor % COVER_COUNT) + 1}.jpg`); // 换新封面+主色调
+          applyCover(cs.slot, (coverCursor % COVER_COUNT) + 1); // 换新封面+主色调
           coverCursor++;
         }
         // 倾斜平滑趋近目标（指数插值，帧率无关）
@@ -1214,6 +1394,7 @@
       mode = 'busy';
       selectedCS = cs;
       clearAllHover();
+      searchCaret.classList.add('hide');     // 播放页隐藏首页搜索光标
 
       // 1) 被选中卡：飞到屏幕中央、正过来、放大；落定后接上漂浮 + 描边
       cs.card.classList.add('playing');
@@ -1297,6 +1478,7 @@
           cs.slot.style.zIndex = '';         // 还原层级
           returningCS = null;
           mode = 'flow';
+          searchCaret.classList.remove('hide');   // 返回首页重新显示搜索光标
         },
       });
 
@@ -1309,6 +1491,7 @@
     }
 
     window.addEventListener('click', (e) => {
+      if (searchMode) return;                           // 搜索模式下忽略卡片选择
       if (mode === 'selected') { returnToFlow(); return; }
       if (mode !== 'flow') return;
       const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -1317,6 +1500,131 @@
       const cs = cardState.find((c) => c.slot === slotEl);
       if (cs) select(cs);
     });
+
+    // ── 搜索模式：点光标→全屏高斯模糊+大字输入(视频/圆弧仍在动)；ESC 退出 ──
+    let searchMode = false;
+    const searchCaret = document.getElementById('search-caret');
+    const searchOverlay = document.getElementById('search-overlay');
+    const searchInput = document.getElementById('search-input');
+    const searchProgress = document.getElementById('search-progress');
+    const thickCaret = document.getElementById('search-thickcaret');
+    const searchMeasure = document.getElementById('search-measure');
+    let searching = false;
+
+    // 自定义粗光标：测量已输入文字宽度，定位到文字末尾(输入框居中对齐)
+    function placeThickCaret() {
+      searchMeasure.textContent = searchInput.value || '';
+      const tw = searchMeasure.offsetWidth;
+      const r = searchInput.getBoundingClientRect();
+      const cx = r.left + r.width / 2;                 // 居中对齐 → 文字中心=框中心
+      const x = cx + tw / 2 + 6;                       // 末尾再留点缝
+      const h = r.height * 0.74;
+      thickCaret.style.left = x + 'px';
+      thickCaret.style.top = (r.top + r.height / 2 - h / 2) + 'px';
+      thickCaret.style.height = h + 'px';
+    }
+
+    function enterSearch() {
+      if (searchMode) return;
+      searchMode = true; searching = false;
+      searchOverlay.classList.add('on');
+      searchInput.value = '';
+      searchProgress.textContent = '';
+      setTimeout(() => { searchInput.focus(); placeThickCaret(); }, 50);
+    }
+    function exitSearch() {
+      if (!searchMode) return;
+      searchMode = false;
+      searchOverlay.classList.remove('on');
+      searchInput.blur();
+    }
+
+    searchCaret.addEventListener('click', (e) => { e.stopPropagation(); enterSearch(); });
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && searchMode) exitSearch(); });
+    // 点击空白(覆盖层本身, 非输入框/进度/光标)→ 退出搜索
+    searchOverlay.addEventListener('click', (e) => {
+      if (e.target === searchOverlay) { e.stopPropagation(); exitSearch(); }
+    });
+    searchInput.addEventListener('input', placeThickCaret);
+    searchInput.addEventListener('keyup', placeThickCaret);
+    searchInput.addEventListener('click', placeThickCaret);
+    window.addEventListener('resize', () => { if (searchMode) placeThickCaret(); });
+
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const q = searchInput.value.trim();
+        if (q && !searching) runSearch(q);
+      }
+    });
+
+    // 搜索保留号：搜到的歌临时注册到 999，复用现成的 select() 播放机制
+    const SEARCH_NUM = 999;
+    let progTween = null;
+    function setProgress(to, dur) {
+      const o = { v: parseInt(searchProgress.textContent) || 0 };
+      if (progTween) progTween.kill();
+      progTween = gsap.to(o, {
+        v: to, duration: dur || 0.5, ease: 'power1.out',
+        onUpdate: () => { searchProgress.textContent = Math.round(o.v) + '%'; },
+      });
+    }
+
+    async function runSearch(q) {
+      searching = true;
+      searchProgress.textContent = '0%';
+      setProgress(15, 0.4);
+      try {
+        // 1) 搜索取第一首
+        const sr = await fetch('/ncm/api/cloudsearch?keywords=' + encodeURIComponent(q) + '&limit=1&type=1');
+        const sj = await sr.json();
+        const song = sj && sj.result && sj.result.songs && sj.result.songs[0];
+        if (!song) { searchProgress.textContent = '没找到'; searching = false; return; }
+        setProgress(45, 0.5);
+        const id = song.id;
+        const name = song.name || q;
+        const arr = (song.ar || song.artists || []);
+        const artist = arr.map(a => a.name).join(' / ') || '';
+        const picUrl = (song.al || song.album || {}).picUrl || '';
+
+        // 2) 注册到保留号 999；MV 按第一歌手名搜网易云 MV(type=1004)随机一支
+        SONGS[SEARCH_NUM] = { id, start: 0, end: 30 };
+        META[SEARCH_NUM] = [name, artist];
+        PIC[SEARCH_NUM] = picUrl ? ('/ncm/img?u=' + encodeURIComponent(picUrl)) : ('assets/cover1.jpg');
+        const artist0 = (arr[0] && arr[0].name) || artist || name;
+        let mvids = [];
+        try {
+          const mr = await fetch('/ncm/api/cloudsearch?keywords=' + encodeURIComponent(artist0) + '&limit=12&type=1004');
+          const mj = await mr.json();
+          mvids = ((mj && mj.result && (mj.result.mvs || mj.result.videos)) || []).map(v => v.id || v.vid).filter(Boolean);
+        } catch (e) {}
+        if (!mvids.length && (song.mv || song.mvid)) mvids = [song.mv || song.mvid];
+        MV_POOL[SEARCH_NUM] = mvids;
+
+        // 3) 预拉歌词 + 封面，进度爬升
+        await fetch('/ncm/api/lyric?id=' + id).catch(() => {});
+        setProgress(72, 0.5);
+        if (picUrl) { await new Promise(res => { const im = new Image(); im.onload = im.onerror = res; im.src = PIC[SEARCH_NUM]; }); }
+        setProgress(90, 0.4);
+
+        // 4) 劫持一张当前最靠中间的卡，换成搜到的歌，复用 select() 飞到中央播放
+        let best = null, bestA = 1e9;
+        cardState.forEach((cs) => {
+          const a = Math.abs(cs.base - scroll + cs.off);
+          if (a < bestA) { bestA = a; best = cs; }
+        });
+        applyCover(best.slot, SEARCH_NUM);
+        setProgress(100, 0.35);
+        setTimeout(() => {
+          exitSearch();
+          searching = false;
+          if (mode === 'flow') select(best);
+        }, 420);
+      } catch (e) {
+        searchProgress.textContent = '搜索出错';
+        searching = false;
+      }
+    }
 
     // 窗口尺寸变化时按当前角度即时归位（不重播入场；数量变化暂不重建）
     let resizeTimer;
